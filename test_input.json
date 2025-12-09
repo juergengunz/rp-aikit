@@ -1,0 +1,17 @@
+{
+  "input": {
+    "lora_file_name": "gunzx-FLUX",
+    "trigger_word": "SKS",
+    "data_url": "dataset_zip_url",
+    "train_steps": 1000,
+    "train_batch_size": 1,
+    "dataset":{
+      "resolution": 512
+    },
+    "train_lr": 4e-4,
+    "gcsConfig": {
+      "projectId": "heartflyserver",
+      "bucketName": "drheadshot"
+    }
+  }
+}
