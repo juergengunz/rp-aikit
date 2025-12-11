@@ -8,7 +8,7 @@ config:
       sqlite_db_path: "./aitk_db.db"
       device: "cuda"
       trigger_word: "ohwx_man"
-      performance_log_every: 10
+      performance_log_every: 50
       network:
         type: "lokr"
         linear: 32
@@ -21,7 +21,7 @@ config:
           ignore_if_contains: []
       save:
         dtype: "bf16"
-        save_every: 250
+        save_every: 1000
         max_step_saves_to_keep: 4
         save_format: "diffusers"
         push_to_hub: false
