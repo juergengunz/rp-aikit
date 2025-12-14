@@ -8,6 +8,7 @@ from google.oauth2 import service_account
 from huggingface_hub import HfApi
 import time
 import random
+import concurrent.futures
 
 GCS_SCHEMA = {
     'projectId': {'type': str, 'required': True},
@@ -148,19 +149,34 @@ def download(job_input):
     job_input['dataset'] = dataset
     return job_input
 
-def upload_file_to_huggingface(file_name, file_location, hf_config, gcs_config=None, max_retries=3, initial_delay=1):
+def _do_hf_upload(file_location, file_name, hf_config):
+    """Internal function to perform the actual HuggingFace upload."""
     api = HfApi(token=hf_config['token'])
+    api.upload_file(
+        path_or_fileobj=file_location,
+        path_in_repo=file_name,
+        repo_id=hf_config['repo_id'],
+        repo_type="model",
+    )
+    return f"https://huggingface.co/{hf_config['repo_id']}/resolve/main/{file_name}"
+
+def upload_file_to_huggingface(file_name, file_location, hf_config, gcs_config=None, max_retries=3, initial_delay=1, timeout_seconds=300):
+    """Upload file to HuggingFace with retry logic and timeout.
     
+    Args:
+        timeout_seconds: Maximum time in seconds to wait for upload (default 5 minutes)
+    """
     for attempt in range(max_retries):
         try:
-            # Upload the file directly to the root of the repository
-            response = api.upload_file(
-                path_or_fileobj=file_location,
-                path_in_repo=file_name,
-                repo_id=hf_config['repo_id'],
-                repo_type="model",
-            )
-            return f"https://huggingface.co/{hf_config['repo_id']}/resolve/main/{file_name}"
+            # Use ThreadPoolExecutor to enforce timeout on the upload
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(_do_hf_upload, file_location, file_name, hf_config)
+                try:
+                    result = future.result(timeout=timeout_seconds)
+                    return result
+                except concurrent.futures.TimeoutError:
+                    print(f"Upload timed out after {timeout_seconds} seconds (Attempt {attempt + 1}/{max_retries})")
+                    raise TimeoutError(f"HuggingFace upload timed out after {timeout_seconds} seconds")
         except Exception as e:
             if attempt < max_retries - 1:
                 delay = 10 * (attempt + 1)  # This will give us 10, 20, 30 seconds
@@ -242,6 +258,10 @@ def train_lora(job):
                 if 'hfConfig2' in job_input and not upload_success:
                     try:
                         print("Attempting upload with backup hfConfig2...")
+                        # Set HF_TOKEN to hfConfig2's token for this upload
+                        if 'token' in job_input['hfConfig2']:
+                            os.environ['HF_TOKEN'] = job_input['hfConfig2']['token']
+                            print("Updated HF_TOKEN to use hfConfig2 token.")
                         lora_url = upload_file_to_huggingface(
                             file_name=file,
                             file_location=file_location,
