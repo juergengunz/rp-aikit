@@ -191,7 +191,6 @@ def upload_file_to_gcs(file_name, file_location, gcs_config, hf_config=None):
     client = storage.Client(project=gcs_config['projectId'], credentials=credentials)
     bucket = client.get_bucket(gcs_config['bucketName'])
     
-    # Create the blob with 'models/' prefix
     blob = bucket.blob(f"models/{file_name}")
     
     blob.upload_from_filename(file_location, timeout=1800)
